@@ -1,48 +1,68 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-from typing import Optional
+import sqlite3
 
 app = FastAPI()
 
-# Temporary storage (in memory)
-notes = []
-counter = {"id": 1}
+# Database setup
+def init_db():
+    conn = sqlite3.connect("journal.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            content TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    conn.close()
 
-# Note structure
+init_db()
+
 class Note(BaseModel):
     title: str
     content: str
 
-# Create a note
+# Create
 @app.post("/notes")
 def create_note(note: Note):
-    new_note = {
-        "id": counter["id"],
-        "title": note.title,
-        "content": note.content
-    }
-    notes.append(new_note)
-    counter["id"] += 1
-    return new_note
+    conn = sqlite3.connect("journal.db")
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO notes (title, content) VALUES (?, ?)", (note.title, note.content))
+    conn.commit()
+    note_id = cursor.lastrowid
+    conn.close()
+    return {"id": note_id, "title": note.title, "content": note.content}
 
-# Get all notes
+# Get all
 @app.get("/notes")
 def get_notes():
-    return notes
+    conn = sqlite3.connect("journal.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM notes")
+    rows = cursor.fetchall()
+    conn.close()
+    return [{"id": r[0], "title": r[1], "content": r[2]} for r in rows]
 
-# Get one note
+# Get one
 @app.get("/notes/{note_id}")
 def get_note(note_id: int):
-    for note in notes:
-        if note["id"] == note_id:
-            return note
+    conn = sqlite3.connect("journal.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM notes WHERE id = ?", (note_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return {"id": row[0], "title": row[1], "content": row[2]}
     return {"error": "Note not found"}
 
-# Delete a note
+# Delete
 @app.delete("/notes/{note_id}")
 def delete_note(note_id: int):
-    for note in notes:
-        if note["id"] == note_id:
-            notes.remove(note)
-            return {"message": "Deleted"}
-    return {"error": "Note not found"}
+    conn = sqlite3.connect("journal.db")
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM notes WHERE id = ?", (note_id,))
+    conn.commit()
+    conn.close()
+    return {"message": "Deleted"}
