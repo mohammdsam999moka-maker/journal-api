@@ -57,6 +57,16 @@ def get_note(note_id: int):
         return {"id": row[0], "title": row[1], "content": row[2]}
     return {"error": "Note not found"}
 
+# Update
+@app.put("/notes/{note_id}")
+def update_note(note_id: int, note: Note):
+    conn = sqlite3.connect("journal.db")
+    cursor = conn.cursor()
+    cursor.execute("UPDATE notes SET title = ?, content = ? WHERE id = ?", (note.title, note.content, note_id))
+    conn.commit()
+    conn.close()
+    return {"id": note_id, "title": note.title, "content": note.content}
+
 # Delete
 @app.delete("/notes/{note_id}")
 def delete_note(note_id: int):
